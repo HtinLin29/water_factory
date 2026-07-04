@@ -16,9 +16,11 @@ interface Manager {
 }
 
 import { useAppPreferences } from '@/contexts/AppPreferencesContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function SettingsPage() {
   const { t } = useAppPreferences();
+  const { manager: currentManager } = useAuth();
   const [products, setProducts] = useState<ProductType[]>([]);
   const [prices, setPrices] = useState<Record<string, { price: number; effective_from: string }[]>>({});
   const [thresholds, setThresholds] = useState<LowStockThresholds>(DEFAULT_LOW_STOCK_THRESHOLDS);
@@ -27,6 +29,7 @@ export default function SettingsPage() {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
 
   const [newPrice, setNewPrice] = useState({ productId: '', price: '', effectiveFrom: '' });
   const [newManager, setNewManager] = useState({ name: '', email: '', password: '', cityId: '' });
@@ -119,23 +122,43 @@ export default function SettingsPage() {
     });
     const data = await res.json();
     if (res.ok) {
+      setMessageIsError(false);
       setMessage(t('settings_managerAdded'));
       setNewManager({ name: '', email: '', password: '', cityId: cities[0]?.id ?? '' });
       await loadSettings();
     } else {
-      setMessage(data.error);
+      setMessageIsError(true);
+      setMessage(data.error ?? 'Failed to add manager');
     }
   }
 
   async function removeManager(id: string) {
     if (!confirm(t('settings_removeManagerConfirm'))) return;
-    const res = await fetch(`/api/managers?id=${id}`, { method: 'DELETE' });
-    const data = await res.json();
-    if (res.ok) {
-      setMessage(t('settings_managerRemoved'));
-      await loadSettings();
-    } else {
-      setMessage(data.error);
+    setMessage('');
+    try {
+      const res = await fetch(`/api/managers?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      let data: { error?: string; removed?: string } = {};
+      const text = await res.text();
+      if (text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = { error: text.slice(0, 200) };
+        }
+      }
+      if (res.ok) {
+        setMessageIsError(false);
+        setMessage(t('settings_managerRemoved'));
+        await loadSettings();
+      } else {
+        setMessageIsError(true);
+        setMessage(data.error ?? t('settings_managerRemoveFailed'));
+      }
+    } catch {
+      setMessageIsError(true);
+      setMessage(t('settings_managerRemoveFailed'));
     }
   }
 
@@ -151,7 +174,15 @@ export default function SettingsPage() {
     <AppShell>
       <h2 className="page-title mb-6">{t('settings_title')}</h2>
       {message && (
-        <div className="bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm p-3 rounded-lg mb-4">{message}</div>
+        <div
+          className={`text-sm p-3 rounded-lg mb-4 ${
+            messageIsError
+              ? 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+              : 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
+          }`}
+        >
+          {message}
+        </div>
       )}
 
       <div className="space-y-8 max-w-2xl">
@@ -256,7 +287,7 @@ export default function SettingsPage() {
                     <span className="text-muted ml-1">— Super Admin</span>
                   )}
                 </span>
-                {isSuperAdmin && (
+                {isSuperAdmin && m.role !== 'super_admin' && m.id !== currentManager?.id && (
                   <button onClick={() => removeManager(m.id)} className="text-red-600 text-xs hover:underline shrink-0">
                     {t('remove')}
                   </button>

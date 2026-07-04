@@ -9,8 +9,12 @@ import {
   type ReactNode,
 } from 'react';
 import type { City, ManagerRole } from '@/lib/types';
-
-const CITY_FILTER_KEY = 'wf-city-filter';
+import { createClient } from '@/lib/supabase/client';
+import {
+  CITY_FILTER_KEY,
+  readLoginContext,
+  type LoginContext,
+} from '@/lib/session-storage';
 
 interface AuthManager {
   id: string;
@@ -30,10 +34,9 @@ interface AuthContextValue {
   loading: boolean;
   refresh: () => Promise<void>;
   apiQuery: (baseUrl: string) => string;
-  /** City UUID for write requests. Null only when super admin has "Both" selected. */
   writeCityId: string | null;
-  /** True when super admin must pick a specific city before saving. */
   requiresCitySelection: boolean;
+  loginContext: LoginContext | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -43,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [cities, setCities] = useState<City[]>([]);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [cityFilter, setCityFilterState] = useState('both');
+  const [loginContext, setLoginContext] = useState<LoginContext | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
@@ -53,19 +57,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCities([]);
         setIsSuperAdmin(false);
         setCityFilterState('both');
+        setLoginContext(null);
         return;
       }
       const data = await res.json();
+      const ctx = readLoginContext();
+
       setManager(data.manager);
       setCities(data.cities ?? []);
       setIsSuperAdmin(data.isSuperAdmin);
+      setLoginContext(ctx);
 
       if (data.isSuperAdmin) {
-        const saved = localStorage.getItem(CITY_FILTER_KEY);
-        setCityFilterState(saved ?? 'both');
+        if (ctx?.type === 'super_admin') {
+          const saved = localStorage.getItem(CITY_FILTER_KEY);
+          setCityFilterState(saved === 'both' || !saved ? 'both' : saved);
+        } else {
+          setCityFilterState('both');
+        }
       } else if (data.manager?.city_id) {
         localStorage.removeItem(CITY_FILTER_KEY);
         setCityFilterState(data.manager.city_id);
+      } else {
+        setCityFilterState('both');
       }
     } catch {
       setManager(null);
@@ -76,6 +90,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     refresh();
+
+    const supabase = createClient();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setManager(null);
+        setCities([]);
+        setIsSuperAdmin(false);
+        setCityFilterState('both');
+        setLoginContext(null);
+        setLoading(false);
+        return;
+      }
+      if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        void refresh();
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, [refresh]);
 
   const setCityFilter = useCallback(
@@ -118,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         apiQuery,
         writeCityId,
         requiresCitySelection,
+        loginContext,
       }}
     >
       {children}

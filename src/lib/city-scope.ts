@@ -85,9 +85,7 @@ export function writeCityFromBody(
     if (!manager.city_id) {
       throw new Error('Manager account has no city assigned');
     }
-    if (bodyCityId && bodyCityId !== manager.city_id) {
-      throw new CityAccessDeniedError();
-    }
+    // Branch managers are always locked to their assigned city (ignore client cityId).
     return manager.city_id;
   }
   return requireWriteCityId(manager, bodyCityId);

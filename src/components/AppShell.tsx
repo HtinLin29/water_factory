@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { clearAppSessionStorage } from '@/lib/session-storage';
 import { useAppPreferences } from '@/contexts/AppPreferencesContext';
 import { useAuth } from '@/contexts/AuthContext';
 import PreferencesBar from '@/components/PreferencesBar';
@@ -25,10 +26,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useAppPreferences();
-  const { manager, isSuperAdmin, cities, cityFilter, setCityFilter } = useAuth();
+  const { manager, isSuperAdmin, cities, cityFilter, setCityFilter, loginContext } = useAuth();
 
   async function handleLogout() {
     const supabase = createClient();
+    clearAppSessionStorage();
     await supabase.auth.signOut();
     router.push('/login');
     router.refresh();
@@ -41,7 +43,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       const city = cities.find((c) => c.id === cityFilter);
       return city ? `${city.name} ${t('city_branch')}` : t('city_allBranches');
     }
-    return manager.cityName ? `${manager.cityName} ${t('city_branch')}` : '';
+    const cityName =
+      manager.cityName ??
+      (loginContext?.type === 'manager' ? loginContext.cityName : null);
+    return cityName ? `${cityName} ${t('city_branch')}` : '';
   }
 
   return (

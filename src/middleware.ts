@@ -31,10 +31,17 @@ export async function middleware(request: NextRequest) {
 
   const isLoginPage = request.nextUrl.pathname === '/login';
   const isSetupApi = request.nextUrl.pathname === '/api/setup';
-  const isAuthCallback = request.nextUrl.pathname.startsWith('/api/auth');
+  const isAuthApi = request.nextUrl.pathname.startsWith('/api/auth');
   const isCleanup = request.nextUrl.pathname.startsWith('/api/cleanup');
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/');
 
-  if (!user && !isLoginPage && !isAuthCallback && !isSetupApi && !isCleanup) {
+  const isPublicWhenLoggedOut =
+    isLoginPage || isAuthApi || isSetupApi || isCleanup;
+
+  if (!user && !isPublicWhenLoggedOut) {
+    if (isApiRoute) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);

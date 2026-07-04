@@ -28,19 +28,35 @@ interface DashboardData {
 
 export default function DashboardPage() {
   const { t } = useAppPreferences();
-  const { apiQuery, cityFilter } = useAuth();
+  const { apiQuery, cityFilter, manager, loading: authLoading } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
   const [summaryText, setSummaryText] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!manager) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
     setLoading(true);
-    fetch(apiQuery('/api/dashboard'))
-      .then((r) => r.json())
-      .then(setData)
+
+    fetch(apiQuery('/api/dashboard'), { signal: controller.signal })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return r.json() as Promise<DashboardData>;
+      })
+      .then((json) => setData(json))
+      .catch(() => setData(null))
       .finally(() => setLoading(false));
-  }, [apiQuery, cityFilter]);
+
+    return () => controller.abort();
+  }, [apiQuery, cityFilter, manager, authLoading]);
 
   async function copySummary() {
     const res = await fetch(apiQuery('/api/summary-text'));
@@ -63,7 +79,7 @@ export default function DashboardPage() {
     return t('dashboard_didNotGo');
   }
 
-  if (loading) {
+  if (authLoading || loading || !manager || !data?.stockCards) {
     return (
       <AppShell>
         <LoadingSpinner />
@@ -109,7 +125,7 @@ export default function DashboardPage() {
           {t('dashboard_currentStock')}
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {data?.stockCards.map((card) => (
+          {(data.stockCards ?? []).map((card) => (
             <StockCard
               key={card.productName}
               productName={card.productName}
@@ -128,7 +144,7 @@ export default function DashboardPage() {
           {t('dashboard_driverStatus')}
         </h3>
         <div className="card">
-          {!data?.driverStatuses.length ? (
+          {!data.driverStatuses?.length ? (
             <p className="text-muted text-sm">{t('dashboard_noDrivers')}</p>
           ) : (
             <ul className="divide-y divide-slate-100 dark:divide-slate-700">

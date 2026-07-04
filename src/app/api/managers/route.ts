@@ -7,6 +7,7 @@ import {
   forbiddenResponse,
 } from '@/lib/auth-helpers';
 import { isSuperAdmin } from '@/lib/city-scope';
+import { clearManagerReferences } from '@/lib/clear-manager-references';
 
 export async function GET() {
   const { manager, error } = await getAuthenticatedManager();
@@ -89,9 +90,44 @@ export async function DELETE(request: Request) {
   if (id === manager.id) return badRequestResponse('Cannot remove your own account');
 
   const admin = createAdminClient();
-  const { error: deleteError } = await admin.from('managers').delete().eq('id', id);
-  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
 
-  await admin.auth.admin.deleteUser(id);
-  return NextResponse.json({ success: true });
+  const { data: target, error: fetchError } = await admin
+    .from('managers')
+    .select('id, role, name, email')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !target) {
+    return badRequestResponse('Manager not found');
+  }
+
+  if (target.role === 'super_admin') {
+    return badRequestResponse('Super admin accounts cannot be removed from the app');
+  }
+
+  await clearManagerReferences(admin, id);
+
+  // managers.id → auth.users(id) ON DELETE CASCADE — delete auth user removes manager row
+  const { error: authDeleteError } = await admin.auth.admin.deleteUser(id);
+  if (authDeleteError) {
+    // Fallback: try deleting manager row directly if auth delete failed
+    const { error: managerDeleteError } = await admin.from('managers').delete().eq('id', id);
+    if (managerDeleteError) {
+      return NextResponse.json(
+        {
+          error: `Could not remove manager: ${authDeleteError.message}. ${managerDeleteError.message}`,
+        },
+        { status: 500 }
+      );
+    }
+  }
+
+  // Ensure manager row is gone (in case cascade did not run)
+  await admin.from('managers').delete().eq('id', id);
+
+  return NextResponse.json({
+    success: true,
+    removed: target.name,
+    email: target.email,
+  });
 }
