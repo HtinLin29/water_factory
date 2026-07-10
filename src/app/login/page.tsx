@@ -21,8 +21,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [isSetup, setIsSetup] = useState(false);
-  const [setupName, setSetupName] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -104,28 +102,6 @@ export default function LoginPage() {
     router.refresh();
   }
 
-  async function handleSetup(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
-    const res = await fetch('/api/setup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, name: setupName }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setError(data.error);
-      setLoading(false);
-      return;
-    }
-    const supabase = createClient();
-    await supabase.auth.signInWithPassword({ email, password });
-    await refresh();
-    router.push('/dashboard');
-    router.refresh();
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-700 to-blue-900 dark:from-slate-900 dark:to-slate-950 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md p-8">
@@ -140,63 +116,53 @@ export default function LoginPage() {
           <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 text-sm p-3 rounded-lg mb-4">{error}</div>
         )}
 
-        <form onSubmit={isSetup ? handleSetup : handleLogin} className="space-y-4">
-          {!isSetup && (
-            <>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  {t('login_accountType')}
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAccountType('super_admin')}
-                    className={`min-h-[44px] rounded-xl text-sm font-semibold border-2 transition ${
-                      accountType === 'super_admin'
-                        ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-                        : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {t('login_superAdmin')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAccountType('city_manager')}
-                    className={`min-h-[44px] rounded-xl text-sm font-semibold border-2 transition ${
-                      accountType === 'city_manager'
-                        ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-                        : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
-                    }`}
-                  >
-                    {t('login_cityManager')}
-                  </button>
-                </div>
-              </div>
-              {accountType === 'city_manager' && (
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    {t('login_selectCity')}
-                  </label>
-                  <select
-                    value={selectedCityId}
-                    onChange={(e) => setSelectedCityId(e.target.value)}
-                    className="input-field"
-                    required
-                  >
-                    {cities.map((city) => (
-                      <option key={city.id} value={city.id}>
-                        {city.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </>
-          )}
-          {isSetup && (
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              {t('login_accountType')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setAccountType('super_admin')}
+                className={`min-h-[44px] rounded-xl text-sm font-semibold border-2 transition ${
+                  accountType === 'super_admin'
+                    ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                    : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {t('login_superAdmin')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAccountType('city_manager')}
+                className={`min-h-[44px] rounded-xl text-sm font-semibold border-2 transition ${
+                  accountType === 'city_manager'
+                    ? 'border-blue-600 bg-blue-50 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
+                    : 'border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                }`}
+              >
+                {t('login_cityManager')}
+              </button>
+            </div>
+          </div>
+          {accountType === 'city_manager' && (
             <div>
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">{t('login_yourName')}</label>
-              <input type="text" value={setupName} onChange={(e) => setSetupName(e.target.value)} className="input-field" required />
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                {t('login_selectCity')}
+              </label>
+              <select
+                value={selectedCityId}
+                onChange={(e) => setSelectedCityId(e.target.value)}
+                className="input-field"
+                required
+              >
+                {cities.map((city) => (
+                  <option key={city.id} value={city.id}>
+                    {city.name}
+                  </option>
+                ))}
+              </select>
             </div>
           )}
           <div>
@@ -208,7 +174,7 @@ export default function LoginPage() {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" required minLength={6} />
           </div>
           <button type="submit" disabled={loading} className="btn-primary w-full">
-            {loading ? t('login_pleaseWait') : isSetup ? t('login_createAccount') : t('login_signIn')}
+            {loading ? t('login_pleaseWait') : t('login_signIn')}
           </button>
         </form>
       </div>
