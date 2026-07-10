@@ -211,18 +211,6 @@ export default function LoginPage() {
             {loading ? t('login_pleaseWait') : isSetup ? t('login_createAccount') : t('login_signIn')}
           </button>
         </form>
-
-        <p className="text-center text-xs text-muted mt-6">
-          {isSetup ? (
-            <button onClick={() => setIsSetup(false)} className="text-blue-600 dark:text-blue-400 hover:underline">
-              {t('login_backToLogin')}
-            </button>
-          ) : (
-            <button onClick={() => setIsSetup(true)} className="text-blue-600 dark:text-blue-400 hover:underline">
-              {t('login_firstTime')}
-            </button>
-          )}
-        </p>
       </div>
     </div>
   );
